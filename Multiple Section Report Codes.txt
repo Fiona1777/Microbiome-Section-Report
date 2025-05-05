@@ -1,0 +1,300 @@
+# The function of this code is to generate a visualization file which can be used on qiime2 of the sequence data.
+# you would input the demux artifact and turns the output into a .qzv that contains sequence quality plots, number of sequences per sample and other information.
+
+	qiime demux summarize \
+  	--i-data demux.qza \
+ 	--o-visualization demux.qzv
+
+# The function of this code is to view the .qzv file on qiime2.
+	
+	qiime tools view demux.qzv
+
+# The function of this code is to denoise pair end sequence data by using the dada2 tool.
+# It uses the demux.qza file as the input.
+#  --p-trunc-len-f and --p-trunc-len-r parameters can truncate forward and reverse reads by giving them a position.
+# --p-trim-left-f and --p-trim-left-r parameters how many bases you are able to trim from the start of the read.
+# The output files are going to be generated are - rep-seqs.qza, which will have our representative sequences, table.qza, which will have our feature table showing the frequency, and stats.qza, which will have the statistics from the denoising process. 
+
+	qiime dada2 denoise-paired \
+--i-demultiplexed-seqs demux.qza \
+--p-trunc-len-f 240 \
+--p-trim-left-f 0 \
+--p-trunc-len-r 180 \
+--p-trim-left-r 0 \
+--o-representative-sequences rep-seqs.qza \
+--o-table table.qza \
+--o-denoising-stats stats.qza
+
+# The function of this code is to generate a visualization of the representative sequences and table from the previous code. 
+# It uses the metadata.txt file to help display information about the frequency. 
+
+	qiime feature-table summarize \
+--i-table table.qza \
+--o-visualization table.qzv \
+--m-sample-metadata-file metadata.txt
+qiime feature-table tabulate-seqs \
+--i-data rep-seqs.qza \
+--o-visualization rep-seqs.qzv
+
+# The function of this code is to download Naive Bayes classifier.
+# The output file will be saved as gg-13-8-99-515-806-nb-classifier.qza
+
+	wget \
+  -O "gg-13-8-99-515-806-nb-classifier.qza" \
+  "https://data.qiime2.org/classifiers/sklearn-1.4.2/greengenes/gg-13-8-99-515-806-nb-classifier.qza"
+
+# The function of this code is assign taxonomy to each sequence in the rep-seqs.gza file using the Naive Bayes classifier.
+# The output file will be taxonomy.gza.
+
+	qiime feature-classifier classify-sklearn \
+--i-classifier gg-13-8-99-515-806-nb-classifier.qza \
+--i-reads rep-seqs.qza \
+--o-classification taxonomy.qza
+
+# This function is to turn the taxonomy artifact into a visualization to view in qiime2.
+
+	qiime metadata tabulate \
+--m-input-file taxonomy.qza \
+--o-visualization taxonomy.qzv
+
+# The function of this code is to filter the feature table so only features with phylum will be present. 
+# It will exclude mitochondria and chloroplast
+# The output will be a table-with-phyla-no-mitochondria-chloroplast.qza
+
+	qiime taxa filter-table \
+--i-table table.qza \
+--i-taxonomy taxonomy.qza \
+--p-include p__ \
+--p-exclude mitochondria,chloroplast \
+--o-filtered-table table-with-phyla-no-mitochondria-chloroplast.qza
+
+# The function of this code is to filter the already filtered feature table from the previous step. 
+# It will exclude any features under kingdom Archaea.
+# The output file would be table-with-phyla-no-mitochondria-chloroplasts-archaea.qza
+
+	qiime taxa filter-table \
+--i-table table-with-phyla-no-mitochondria-chloroplast.qza \
+--i-taxonomy taxonomy.qza \
+--p-exclude "k__Archaea" \
+--o-filtered-table table-with-phyla-no-mitochondria-chloroplasts-archaea.qza
+
+# This function will remove any other features under eukaryotes.
+# It inputs the file from the previous step.
+# The output file will be table-with-phyla-no-mitochondria-chloroplasts-archaea-eukaryota.qza
+
+	qiime taxa filter-table \
+--i-table table-with-phyla-no-mitochondria-chloroplasts-archaea.qza \
+--i-taxonomy taxonomy.qza \
+--p-exclude "k__Eukaryota" \
+--o-filtered-table table-with-phyla-no-mitochondria-chloroplasts-archaea-eukaryota.qza
+
+# This function is to filter out any sequences that aren't suppose to be there from the rep-sets.gza files.
+# It will only include sequences that include a phylum. 
+# The output file would be rep-seqs-with-phyla-no-mitochondria-chloroplast.qza.
+
+	qiime taxa filter-seqs \
+--i-sequences rep-seqs.qza \
+--i-taxonomy taxonomy.qza \
+--p-include p__ \
+--p-exclude mitochondria,chloroplast \
+--o-filtered-sequences rep-seqs-with-phyla-no-mitochondria-chloroplast.qza
+
+# This function is to further filter out the sequences that are under Archaea.
+# The input files contains the file that don't contain sequences from mitochondria and chloroplast.
+# The output file will be under rep-seqs-with-phyla-no-mitochondria-chloroplasts-archaea.qza.
+
+	qiime taxa filter-seqs \
+--i-sequences rep-seqs-with-phyla-no-mitochondria-chloroplast.qza \
+--i-taxonomy taxonomy.qza \
+--p-exclude "k__Archaea" \
+--o-filtered-sequences rep-seqs-with-phyla-no-mitochondria-chloroplasts-archaea.qza
+
+# This function helps further filter out any sequences under Eukaryota.
+# It uses the previous file to filter out the sequences.
+# The output file will be under rep-seqs-with-phyla-no-mitochondria-chloroplasts-archaea-eukaryota.qza
+
+	qiime taxa filter-seqs \
+--i-sequences rep-seqs-with-phyla-no-mitochondria-chloroplasts-archaea.qza \
+--i-taxonomy taxonomy.qza \
+--p-exclude "k__Eukaryota" \
+--o-filtered-sequences rep-seqs-with-phyla-no-mitochondria-chloroplasts-archaea-eukaryota.qza
+
+# This function will rename the filtered table to a more simple name.
+# The new output file will be under filtered-table.qza.
+
+	mv table-with-phyla-no-mitochondria-chloroplasts-archaea-eukaryota.qza filtered-table.qza
+
+# This function will rename the filtered sequences to a more simple name.
+# The new output file will be under filtered-rep-seqs.qza.
+
+	mv rep-seqs-with-phyla-no-mitochondria-chloroplasts-archaea-eukaryota.qza filtered-rep-seqs.qza
+
+# This function generates a taxonomy bar plot visualization by using the filtered-table artifact and the taxonomy artifact and the metadata file to generate a visualization file to view at qiime2.
+# The output file will be under taxa-bar-plots.qzv.
+# Had to use a .tsv file because metadata.txt wasn't working.
+
+	qiime taxa barplot \
+--i-table filtered-table.qza \
+--i-taxonomy taxonomy.qza \
+--m-metadata-file metadata-3.tsv \
+--o-visualization taxa-bar-plots.qzv
+
+# This function will generate a phylogenetic tree from the representative sequences.
+# It will align the sequences using MAFFT, mask alignments, and contract a unrooted and rooted tree.
+# The output file would be aligned-rep-seqs.qza, masked-aligned-rep-seqs.qza, rooted-tree.qza and unrooted-tree.qza.
+
+	qiime phylogeny align-to-tree-mafft-fasttree \
+--i-sequences filtered-rep-seqs.qza \
+--o-alignment aligned-rep-seqs.qza \
+--o-masked-alignment masked-aligned-rep-seqs.qza \
+--o-tree unrooted-tree.qza \
+--o-rooted-tree rooted-tree.qza
+
+# This function will generate a visualization of the filtered features table.
+# It uses the filtered table artifact as the input file.
+# The output file will be under filtered-table.qzv.
+
+	qiime feature-table summarize \
+--i-table filtered-table.qza \
+--o-visualization filtered-table.qzv \
+--m-sample-metadata-file metadata-3.tsv
+
+# This function will perform a core diversity analysis on the filtered feature table and rooted tree while using the metadata file as well.
+# It will include alpha and beta diversity metrics.
+# The output will be in a folder called diversity-metrics-results.
+
+	qiime diversity core-metrics-phylogenetic --i-phylogeny rooted-tree.qza --i-table filtered-table.qza --p-sampling-depth 3500 --m-metadata-file metadata-3.tsv --output-dir diversity-metrics-results
+
+# This function compare the observed features and see how different they are to the sample groups.
+# It uses the metadata to group the samples to perform a statistical test.
+# The output file is visualization  called diversity-metrics-results/observed-features-group-significance.qzv
+
+
+	qiime diversity alpha-group-significance \
+--i-alpha-diversity diversity-metrics-results/observed_features_vector.qza \
+--m-metadata-file metadata-3.tsv \
+--o-visualization diversity-metrics-results/observed-features-group-significance.qzv
+
+# This function uses the diversity-metrics-results/shannon_vector.qza to determine whether the Shannon diversity diffs from the parameters in the metadata.
+# The output file will be a visualization under iversity-metrics-results/shannon-group-significance.qzv
+
+	qiime diversity alpha-group-significance \
+--i-alpha-diversity diversity-metrics-results/shannon_vector.qza \
+--m-metadata-file metadata-3.tsv \
+--o-visualization diversity-metrics-results/shannon-group-significance.qzv
+
+# This function uses beta diversity to see if there are any differences in the population, sex, and flock column found in the metadata file.
+# It performs a pairwise comparison between all groups.
+# The output file will be a visualization under diversity-metrics-results/bray-curtis-population.qzv, for the other two parameters switch population with sex & flock.
+
+	qiime diversity beta-group-significance \
+  --i-distance-matrix diversity-metrics-results/bray_curtis_distance_matrix.qza \
+  --m-metadata-file metadata-3.tsv \
+  --m-metadata-column population \
+  --o-visualization diversity-metrics-results/bray-curtis-population.qzv \
+  --p-pairwise
+
+	qiime diversity beta-group-significance \
+  --i-distance-matrix diversity-metrics-results/bray_curtis_distance_matrix.qza \
+  --m-metadata-file metadata-3.tsv \
+  --m-metadata-column sex \
+  --o-visualization diversity-metrics-results/bray-curtis-sex.qzv \
+  --p-pairwise
+
+	qiime diversity beta-group-significance \
+  --i-distance-matrix diversity-metrics-results/bray_curtis_distance_matrix.qza \
+  --m-metadata-file metadata-3.tsv \
+  --m-metadata-column flock \
+  --o-visualization diversity-metrics-results/bray-curtis-flock.qzv \
+  --p-pairwise
+
+# This function uses the  WEIGHTED UNIFRAC to determine if there is any difference between the group based on population, sex, and flock. 
+# Phylogenetic information and the relative abundance would be generated using WEIGHTED UNIFRAC.
+# The output file will be under diversity-metrics-results/weighted-unifrac-population.qzv
+
+	qiime diversity beta-group-significance \
+  --i-distance-matrix diversity-metrics-results/weighted_unifrac_distance_matrix.qza \
+  --m-metadata-file metadata-3.tsv \
+  --m-metadata-column population \
+  --o-visualization diversity-metrics-results/weighted-unifrac-population.qzv \
+  --p-pairwise
+
+	qiime diversity beta-group-significance \
+  --i-distance-matrix diversity-metrics-results/weighted_unifrac_distance_matrix.qza \
+  --m-metadata-file metadata-3.tsv \
+  --m-metadata-column sex \
+  --o-visualization diversity-metrics-results/weighted-unifrac-sex.qzv \
+  --p-pairwise
+
+	qiime diversity beta-group-significance \
+  --i-distance-matrix diversity-metrics-results/weighted_unifrac_distance_matrix.qza \
+  --m-metadata-file metadata-3.tsv \
+  --m-metadata-column flock \
+  --o-visualization diversity-metrics-results/weighted-unifrac-flock.qzv \
+  --p-pairwise
+
+# This function runs ANCOM-BC to see if there are any significant difference in abundance across population, sex, and flock groups using the metadata.
+# The filtered feature artifact is used as an input file.
+# The output file will be under ancombc-population.qza, changing population with sex and flock for the other two files.
+
+	qiime composition ancombc \
+  --i-table filtered-table.qza \
+  --m-metadata-file metadata-3.tsv \
+  --p-formula 'population' \
+  --o-differentials ancombc-population.qza
+
+qiime composition ancombc \
+  --i-table filtered-table.qza \
+  --m-metadata-file metadata-3.tsv \
+  --p-formula 'sex' \
+  --o-differentials ancombc-sex.qza
+
+qiime composition ancombc \
+  --i-table filtered-table.qza \
+  --m-metadata-file metadata-3.tsv \
+  --p-formula 'flock' \
+  --o-differentials ancombc-flock.qza
+
+# This function is to make the .qza files from the step above into .qzv files to view on qiime2.
+
+	qiime composition tabulate \
+  --i-data ancombc-sex.qza \ 
+  --o-visualization ancombc-sex.qzv 
+
+qiime composition tabulate \
+  --i-data ancombc-population.qza \ 
+  --o-visualization ancombc-population.qzv 
+
+qiime composition tabulate \
+  --i-data ancombc-flock.qza \ 
+  --o-visualization ancombc-flock.qzv 
+
+
+# This function is to generate a bar plot visualization from the ANCOM-BC results.
+# The input file will be from the files from the previous steps.
+# The output file is under da-barplot-site.qzv, changing site to population and flock
+# NOTE: da-barplot-site.qzv is the bar plot for the sex parameter. 
+
+	qiime composition da-barplot \
+  --i-data ancombc-sex.qza \
+  --p-significance-threshold 0.05 \
+  --o-visualization da-barplot-site.qzv
+
+	qiime composition da-barplot \
+  --i-data ancombc-population.qza \
+  --p-significance-threshold 0.05 \
+  --o-visualization da-barplot-population.qzv
+
+	qiime composition da-barplot \
+  --i-data ancombc-flock.qza \
+  --p-significance-threshold 0.05 \
+  --o-visualization da-barplot-flock.qzv
+
+
+
+
+
+
+
+
+
